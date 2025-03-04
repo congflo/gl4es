@@ -220,10 +220,11 @@ else()
         target_link_libraries(GL ${log-lib})
     endif()
 
-#    target_link_libraries(GL
-#        "-FFrameworks"
+    target_link_libraries(GL
+        "-FFrameworks"
+        "-framework libEGL"
 #        "-framework libGLESv2"
-#    )
+    )
 
     if(CMAKE_SHARED_LIBRARY_SUFFIX MATCHES ".so")
         set_target_properties(GL PROPERTIES SUFFIX ".so.1")
