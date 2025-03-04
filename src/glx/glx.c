@@ -504,9 +504,7 @@ static void init_vsync() {
 }
 
 static void xrefresh() {
-#ifndef __APPLE__
     int dummy = system("xrefresh");
-#endif
 }
 
 #ifdef PANDORA
@@ -2089,12 +2087,6 @@ GLXContext gl4es_glXCreateNewContext(Display *display, GLXFBConfig config,
 }
 #endif //NOX11
 
-#ifdef __APPLE__
-void glXSwapBuffers(Display *display, GLXDrawable drawable) {
-    gl4es_glXSwapBuffers(display, drawable);
-}
-#endif
-
 void gl4es_glXSwapInterval(int interval) {
     DBG(printf("glXSwapInterval(%i)\n", interval);)
 #ifdef NOEGL
@@ -2997,7 +2989,7 @@ const char *gl4es_glXGetClientString(Display *display, int name) {
 }
 
 // New export the Alias
-#ifndef(NOX11)
+#ifndef NOX11
 AliasExport(GLXContext,glXCreateContext,,(Display *display, XVisualInfo *visual, GLXContext shareList, Bool isDirect));
 AliasExport(GLXContext,glXCreateContextAttribs,ARB,(Display *display, GLXFBConfig config, GLXContext share_context, Bool direct, const int *attrib_list));
 AliasExport(void,glXDestroyContext,,(Display *display, GLXContext ctx));
