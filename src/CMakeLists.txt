@@ -222,6 +222,7 @@ else()
 
     target_link_libraries(GL
         "-framework libGLESv2"
+    )
 
     if(CMAKE_SHARED_LIBRARY_SUFFIX MATCHES ".so")
         set_target_properties(GL PROPERTIES SUFFIX ".so.1")
