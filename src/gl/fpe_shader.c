@@ -20,21 +20,13 @@ static int shad_cap = 0;
 
 static int comments = 1;
 
-#define ShadAppend(S) shad = Append(shad, &shad_cap, S)
+#define ShadAppend(S) shad = gl4es_append(shad, &shad_cap, S)
 
-#ifdef AMIGA
-//                           2D   Rectangle    3D   CubeMap  Stream
-const char* texvecsize[] = {"vec2", "vec2", "vec2", "vec3", "vec2"};
-const char* texxyzsize[] = {"st", "st",    "st",  "stp",   "st"};
-//                          2D              Rectangle      3D          CubeMap          Stream
-const char* texname[] = {"texture2D", "texture2D", "texture2D", "textureCube", "textureStreamIMG"};    // textureRectange and 3D are emulated with 2D
-#else
 //                           2D   Rectangle    3D   CubeMap  Stream
 const char* texvecsize[] = {"vec4", "vec2", "vec2", "vec3", "vec2"};
 const char* texxyzsize[] = {"stpq", "st",    "st",  "stp",   "st"};
 //                          2D              Rectangle      3D          CubeMap          Stream
 const char* texname[] = {"texture2DProj", "texture2D", "texture2D", "textureCube", "textureStreamIMG"};    // textureRectange and 3D are emulated with 2D
-#endif
 const char* texnoproj[] = {"texture2D", "texture2D", "texture2D", "textureCube", "textureStreamIMG"};    // textureRectange and 3D are emulated with 2D
 const char* texsampler[] = {"sampler2D", "sampler2D", "sampler2D", "samplerCube", "samplerStreamIMG"};
 int texnsize[] = {2, 2, 3, 3, 2};
@@ -212,11 +204,11 @@ const char* const* fpe_VertexShader(shaderconv_need_t* need, fpe_state_t *state)
         sprintf(buff, "// ** Vertex Shader **\n// ligthting=%d (twosided=%d, separate=%d, color_material=%d)\n// secondary=%d, planes=%s\n// point=%d%s\n",
             lighting, twosided, light_separate, color_material, secondary, fpe_binary(planes, 6), point, need?" with need":"");
         ShadAppend(buff);
-        headers+=CountLine(buff);
+        headers+=gl4es_countline(buff);
         if(need) {
             sprintf(buff, "// need: color=%d, texs=%s, fogcoord=%d\n", need->need_color, fpe_binary(need->need_texs, 16), need->need_fogcoord);
             ShadAppend(buff);
-            headers+=CountLine(buff);
+            headers+=gl4es_countline(buff);
         }
     }
     if(!is_default) {
@@ -255,7 +247,7 @@ const char* const* fpe_VertexShader(shaderconv_need_t* need, fpe_state_t *state)
             : ""
             );
         ShadAppend(buff);
-        headers += CountLine(buff);
+        headers += gl4es_countline(buff);
         sprintf(buff, 
             "struct _gl4es_FPELightSourceParameters0\n"
             "{\n"
@@ -272,7 +264,7 @@ const char* const* fpe_VertexShader(shaderconv_need_t* need, fpe_state_t *state)
             : ""
             );
         ShadAppend(buff);
-        headers += CountLine(buff);
+        headers += gl4es_countline(buff);
 
         sprintf(buff,
                 "struct _gl4es_LightProducts\n"
@@ -283,7 +275,7 @@ const char* const* fpe_VertexShader(shaderconv_need_t* need, fpe_state_t *state)
                 "};\n"                
         );
         ShadAppend(buff);
-        headers += CountLine(buff);
+        headers += gl4es_countline(buff);
 
         if(!(cm_front_nullexp && color_material)) {
             ShadAppend("uniform highp float _gl4es_FrontMaterial_shininess;\n");
@@ -373,7 +365,7 @@ const char* const* fpe_VertexShader(shaderconv_need_t* need, fpe_state_t *state)
     // let's start
     ShadAppend("\nvoid main() {\n");
     int need_normal = 0;
-    int normal_line = CountLine(shad) - headers;
+    int normal_line = gl4es_countline(shad) - headers;
     if(planes) {
         for (int i=0; i<hardext.maxplanes; i++) {
             if((planes>>i)&1) {
@@ -445,6 +437,7 @@ const char* const* fpe_VertexShader(shaderconv_need_t* need, fpe_state_t *state)
                 sprintf(buff, "BackColor = %s;\n", bm_emission);
                 ShadAppend(buff);
             }
+            
             sprintf(buff, "Color += %s*gl_LightModel.ambient;\n", fm_ambient);
             ShadAppend(buff);
             if(twosided) {
@@ -611,15 +604,17 @@ const char* const* fpe_VertexShader(shaderconv_need_t* need, fpe_state_t *state)
         int t = state->texture[i].textype;
         if(need && (need->need_texs&(1<<i)) && t==0)
             t = 1;
+        if(need && !(need->need_texs&(1<<i)))
+            t = 0;
         int mat = state->texture[i].texmat;
         int adjust = state->texture[i].texadjust;
         int tg[4];
         tg[0] = state->texgen[i].texgen_s;
         tg[1] = state->texgen[i].texgen_t;
         tg[2] = state->texgen[i].texgen_r;
-        tg[3] = state->texgen[i].texgen_q;
-        int ntc = texnsize[t-1];
+        tg[3] = state->texgen[i].texgen_q;        
         if(t) {
+            int ntc = texnsize[t-1];
             if(comments) {
                 sprintf(buff, "// texture %d active: %X %s %s\n", i, t, mat?"with matrix":"", adjust?"npot adjusted":"");
                 ShadAppend(buff);
@@ -727,8 +722,8 @@ const char* const* fpe_VertexShader(shaderconv_need_t* need, fpe_state_t *state)
         if(need_vertex==1)
             strcat(buff, "vec4 ");
         strcat(buff, "vertex = gl_ModelViewMatrix * gl_Vertex;\n");
-        shad = InplaceInsert(GetLine(shad, normal_line + headers), buff, shad, &shad_cap);
-        normal_line += CountLine(buff);
+        shad = gl4es_inplace_insert(gl4es_getline(shad, normal_line + headers), buff, shad, &shad_cap);
+        normal_line += gl4es_countline(buff);
     }
     if(need_normal) {
 #if 0
@@ -740,12 +735,13 @@ const char* const* fpe_VertexShader(shaderconv_need_t* need, fpe_state_t *state)
             strcat(buff, "normal = normalize(normal);\n");
 #else
 // Implementions may choose to normalize for rescale...
-        if(state->rescaling || state->normalize)
+        if(state->rescaling || state->normalize || globals4es.normalize)
             strcpy(buff, "vec3 normal = normalize(gl_NormalMatrix * gl_Normal);\n");
         else
+            //strcpy(buff, "vec3 normal = (vec4(gl_Normal, (gl_Vertex.w==0.0)?0.0:(-dot(gl_Normal, gl_Vertex.xyz)/gl_Vertex.w))*gl_ModelViewMatrixInverse).xyz;\n");
             strcpy(buff, "vec3 normal = gl_NormalMatrix * gl_Normal;\n");
 #endif
-        shad = InplaceInsert(GetLine(shad, normal_line + headers), buff, shad, &shad_cap);
+        shad = gl4es_inplace_insert(gl4es_getline(shad, normal_line + headers), buff, shad, &shad_cap);
     }
     buff[0] = '\0';
     for (int i=0; i<MAX_TEX; i++) {
@@ -766,8 +762,8 @@ const char* const* fpe_VertexShader(shaderconv_need_t* need, fpe_state_t *state)
         }
     }
     if(buff[0]!='\0') {
-        shad = InplaceInsert(GetLine(shad, headers), buff, shad, &shad_cap);
-        headers += CountLine(buff);
+        shad = gl4es_inplace_insert(gl4es_getline(shad, headers), buff, shad, &shad_cap);
+        headers += gl4es_countline(buff);
     }
     if(fog) {
         if(comments) {
@@ -777,7 +773,7 @@ const char* const* fpe_VertexShader(shaderconv_need_t* need, fpe_state_t *state)
         #if 0    // vertex fog
         char fogsrc[50];
         if(fogsource==FPE_FOG_SRC_COORD)
-            strcpy(fogsrc, "FogCoord");
+            strcpy(fogsrc, "gl_FogCoord");
         else switch(fogdist) {
             case FPE_FOG_DIST_RADIAL: strcpy(fogsrc, "length(vertex.xyz)"); break;
             case FPE_FOG_DIST_PLANE: strcpy(fogsrc, "vertex.z"); break;
@@ -798,7 +794,7 @@ const char* const* fpe_VertexShader(shaderconv_need_t* need, fpe_state_t *state)
         }
         #else   // pixel fog
         if(fogsource==FPE_FOG_SRC_COORD)
-            sprintf(buff, "FogSrc = FogCoord;\n");
+            sprintf(buff, "FogSrc = gl_FogCoord;\n");
         else switch(fogdist) {
             case FPE_FOG_DIST_RADIAL: sprintf(buff, "FogSrc = vertex.xyz;\n"); break;
             case FPE_FOG_DIST_PLANE:
@@ -817,14 +813,18 @@ const char* const* fpe_VertexShader(shaderconv_need_t* need, fpe_state_t *state)
 }
 
 const char* const* fpe_FragmentShader(shaderconv_need_t* need, fpe_state_t *state) {
+    // state can be NULL, so provide a 0 default
+    fpe_state_t default_state = {0};
+    int is_default = !need;
+    if(!state) state = &default_state;
     int headers = 0;
     int lighting = state->lighting;
     int twosided = state->twosided && lighting;
     int light_separate = state->light_separate && lighting;
-    int secondary = (state->colorsum && !(lighting && light_separate)) || fpe_texenvSecondary(state);
+    int secondary = is_default?((state->colorsum && !(lighting && light_separate)) || fpe_texenvSecondary(state)):need->need_secondary;
     int alpha_test = state->alphatest;
     int alpha_func = state->alphafunc;
-    int fog = state->fog || (need && need->need_fogcoord);
+    int fog = is_default?state->fog:need->need_fogcoord;
     int fogsource = state->fogsource;
     int fogmode = state->fogmode;
     int fogdist = state->fogdist;
@@ -833,6 +833,7 @@ const char* const* fpe_FragmentShader(shaderconv_need_t* need, fpe_state_t *stat
     int pointsprite = state->pointsprite;
     int pointsprite_coord = state->pointsprite_coord;
     int pointsprite_upper = state->pointsprite_upper;
+    int shaderblend = state->blend_enable;
     int texenv_combine = 0;
     int texturing = 0;
     char buff[1024];
@@ -854,11 +855,14 @@ const char* const* fpe_FragmentShader(shaderconv_need_t* need, fpe_state_t *stat
         if(need_stream)
             ShadAppend("#extension GL_IMG_texture_stream2 : enable\n");
     }
+
+    if(shaderblend)
+        ShadAppend("#extension GL_ARM_shader_framebuffer_fetch : enable\n");
     
     if(comments) {
         sprintf(buff, "// ** Fragment Shader **\n// lighting=%d, alpha=%d, secondary=%d, planes=%s, texturing=%d point=%d\n", lighting, alpha_test, secondary, fpe_binary(planes, 6), texturing, point);
         ShadAppend(buff);
-        headers+=CountLine(buff);
+        headers+=gl4es_countline(buff);
     }
     ShadAppend("varying vec4 Color;\n");
     headers++;
@@ -899,14 +903,13 @@ const char* const* fpe_FragmentShader(shaderconv_need_t* need, fpe_state_t *stat
             }
         }
     }
-    /*if(fog && fogsource==FPE_FOG_SRC_COORD) {
-        ShadAppend("varying float FogCoord;\n");
-        headers++;
-    }*/
     // textures coordinates
     for (int i=0; i<hardext.maxtex; i++) {
         int t = state->texture[i].textype;
         if(point && !pointsprite) t=0;
+        if(!is_default)
+            if(t && !need->need_texs&(1<<i))
+                t = 0;
         if(t) {
             sprintf(buff, "varying %s _gl4es_TexCoord_%d;\n", texvecsize[t-1], i);
             ShadAppend(buff);
@@ -1026,8 +1029,8 @@ const char* const* fpe_FragmentShader(shaderconv_need_t* need, fpe_state_t *stat
                     case FPE_BLEND:
                         // create the Uniform for TexEnv Constant color
                         sprintf(buff, "uniform lowp vec4 _gl4es_TextureEnvColor_%d;\n", i);
-                        shad = InplaceInsert(GetLine(shad, headers), buff, shad, &shad_cap);
-                        headers+=CountLine(buff);
+                        shad = gl4es_inplace_insert(gl4es_getline(shad, headers), buff, shad, &shad_cap);
+                        headers+=gl4es_countline(buff);
                         needclamp=0;
                         if(texformat!=FPE_TEX_ALPHA) {
                             sprintf(buff, "fColor.rgb = mix(fColor.rgb, _gl4es_TextureEnvColor_%d.rgb, texColor%d.rgb);\n", i, i);
@@ -1137,8 +1140,8 @@ const char* const* fpe_FragmentShader(shaderconv_need_t* need, fpe_state_t *stat
                             if(constant) {
                                 // yep, create the Uniform
                                 sprintf(buff, "uniform lowp vec4 _gl4es_TextureEnvColor_%d;\n", i);
-                                shad = InplaceInsert(GetLine(shad, headers), buff, shad, &shad_cap);
-                                headers+=CountLine(buff);                            
+                                shad = gl4es_inplace_insert(gl4es_getline(shad, headers), buff, shad, &shad_cap);
+                                headers+=gl4es_countline(buff);                            
                             }
                             for (int j=0; j<4; j++) {
                                 if(src_r[j]==src_a[j] && op_r[j]==FPE_OP_SRCCOLOR && op_a[j]==FPE_OP_ALPHA) {
@@ -1380,6 +1383,240 @@ const char* const* fpe_FragmentShader(shaderconv_need_t* need, fpe_state_t *stat
         ShadAppend("fColor.rgb = mix(gl_Fog.color.rgb, fColor.rgb, FogF);\n");
         #endif
     }
+    //Blend
+    if(shaderblend) {
+        if(comments) {
+            sprintf(buff, "//Blend: src=%d/%d, dst=%d/%d, eq=%d/%d\n", state->blendsrcrgb, state->blendsrcalpha, state->blenddstrgb, state->blenddstalpha, state->blendeqrgb, state->blendeqalpha);
+            ShadAppend(buff);
+        }
+        const char* frgcolor = "fColor";
+        const char* dstcolor = "gl_LastFragColorARM";
+        for(int i=0; i<2; ++i) {
+            const char* blend = i?"dstblend":"srcblend";
+            int blendrgb= i?state->blenddstrgb:state->blendsrcrgb;
+            int blendalpha = i?state->blenddstalpha:state->blendsrcalpha;
+            if(blendrgb==blendalpha) {
+                int need_vec4 = 0;
+                switch(blendrgb) {
+                    case FPE_BLEND_ZERO:
+                        sprintf(buff, " %s = 0.0;\n", blend);
+                        break;
+                    case FPE_BLEND_ONE:
+                        sprintf(buff, " %s = 1.0;\n", blend);
+                        break;
+                    case FPE_BLEND_SRC_COLOR:
+                        need_vec4 = 1;
+                        sprintf(buff, " %s = %s;\n", blend, frgcolor);
+                        break;
+                    case FPE_BLEND_ONE_MINUS_SRC_COLOR:
+                        need_vec4 = 1;
+                        sprintf(buff, " %s = vec4(1.0)-%s;\n", blend, frgcolor);
+                        break;
+                    case FPE_BLEND_DST_COLOR:
+                        need_vec4 = 1;
+                        sprintf(buff, " %s = %s;\n", blend, dstcolor);
+                        break;
+                    case FPE_BLEND_ONE_MINUS_DST_COLOR:
+                        need_vec4 = 1;
+                        sprintf(buff, " %s = vec4(1.0)-%s;\n", blend, dstcolor);
+                        break;
+                    case FPE_BLEND_SRC_ALPHA:
+                        sprintf(buff, " %s = %s.a;\n", blend, frgcolor);
+                        break;
+                    case FPE_BLEND_ONE_MINUS_SRC_ALPHA:
+                        sprintf(buff, " %s = 1.0 - %s.a;\n", blend, frgcolor);
+                        break;
+                    case FPE_BLEND_DST_ALPHA:
+                        sprintf(buff, " %s = %s.a;\n", blend, dstcolor);
+                        break;
+                    case FPE_BLEND_ONE_MINUS_DST_ALPHA:
+                        sprintf(buff, " %s = 1.0 - %s.a;\n", blend, dstcolor);
+                        break;
+                    case FPE_BLEND_CONSTANT_COLOR:
+                        need_vec4 = 1;
+                        sprintf(buff, " %s = _gl4es_BlendColor;\n", blend);
+                        break;
+                    case FPE_BLEND_ONE_MINUS_CONSTANT_COLOR:
+                        need_vec4 = 1;
+                        sprintf(buff, " %s = vec4(1.0)-_gl4es_BlendColor;\n", blend);
+                        break;
+                    case FPE_BLEND_CONSTANT_ALPHA:
+                        sprintf(buff, " %s = _gl4es_BlendColor.a;\n", blend);
+                        break;
+                    case FPE_BLEND_ONE_MINUS_CONSTANT_ALPHA:
+                        sprintf(buff, " %s = 1.0 - _gl4es_BlendColor.a;\n", blend);
+                        break;
+                    case FPE_BLEND_SRC_ALPHA_SATURATE:
+                        sprintf(buff, " %s = min(%s.a, 1.0-%s.a);\n", blend, frgcolor, dstcolor);
+                        break;
+                }
+                char buff2[100];
+                if(need_vec4)
+                    sprintf(buff2, "lowp vec4 %s;\n", blend);
+                else
+                    sprintf(buff2, "lowp float %s;\n", blend);
+                ShadAppend(buff2);
+                ShadAppend(buff);
+            } else {
+                sprintf(buff, "lowp vec4 %s;\n", blend);
+                ShadAppend(buff);
+                switch(blendrgb) {
+                    case FPE_BLEND_ZERO:
+                        sprintf(buff, " %s.rgb = vec3(0.0);\n", blend);
+                        break;
+                    case FPE_BLEND_ONE:
+                        sprintf(buff, " %s.rgb = vec3(1.0);\n", blend);
+                        break;
+                    case FPE_BLEND_SRC_COLOR:
+                        sprintf(buff, " %s.rgb = %s.rgb;\n", blend, frgcolor);
+                        break;
+                    case FPE_BLEND_ONE_MINUS_SRC_COLOR:
+                        sprintf(buff, " %s.rgb = vec3(1.0)-%s.rgb;\n", blend, frgcolor);
+                        break;
+                    case FPE_BLEND_DST_COLOR:
+                        sprintf(buff, " %s.rgb = %s.rgb;\n", blend, dstcolor);
+                        break;
+                    case FPE_BLEND_ONE_MINUS_DST_COLOR:
+                        sprintf(buff, " %s.rgb = vec3(1.0)-%s.rgb;\n", blend, dstcolor);
+                        break;
+                    case FPE_BLEND_SRC_ALPHA:
+                        sprintf(buff, " %s.rgb = vec3(%s.a);\n", blend, frgcolor);
+                        break;
+                    case FPE_BLEND_ONE_MINUS_SRC_ALPHA:
+                        sprintf(buff, " %s.rgb = vec3(1.0 - %s.a);\n", blend, frgcolor);
+                        break;
+                    case FPE_BLEND_DST_ALPHA:
+                        sprintf(buff, " %s.rgb = vec3(%s.a);\n", blend, dstcolor);
+                        break;
+                    case FPE_BLEND_ONE_MINUS_DST_ALPHA:
+                        sprintf(buff, " %s.rgb = vec3(1.0 - %s.a);\n", blend, dstcolor);
+                        break;
+                    case FPE_BLEND_CONSTANT_COLOR:
+                        sprintf(buff, " %s.rgb = _gl4es_BlendColor.rgb;\n", blend);
+                        break;
+                    case FPE_BLEND_ONE_MINUS_CONSTANT_COLOR:
+                        sprintf(buff, " %s.rgb = vec3(1.0)-_gl4es_BlendColor.rgb;\n", blend);
+                        break;
+                    case FPE_BLEND_CONSTANT_ALPHA:
+                        sprintf(buff, " %s.rgb = vec3(_gl4es_BlendColor.a);\n", blend);
+                        break;
+                    case FPE_BLEND_ONE_MINUS_CONSTANT_ALPHA:
+                        sprintf(buff, " %s.rgb = vec3(1.0 - _gl4es_BlendColor.a);\n", blend);
+                        break;
+                    case FPE_BLEND_SRC_ALPHA_SATURATE:
+                        sprintf(buff, " %s.rgb = vec3(min(%s.a, 1.0-%s.a));\n", blend, frgcolor, dstcolor);
+                        break;
+                }
+                ShadAppend(buff);
+                switch(blendalpha) {
+                    case FPE_BLEND_ZERO:
+                        sprintf(buff, " %s.a = 0.0;\n", blend);
+                        break;
+                    case FPE_BLEND_ONE:
+                        sprintf(buff, " %s.a = 1.0;\n", blend);
+                        break;
+                    case FPE_BLEND_SRC_COLOR:
+                        sprintf(buff, " %s.a = %s.a;\n", blend, frgcolor);
+                        break;
+                    case FPE_BLEND_ONE_MINUS_SRC_COLOR:
+                        sprintf(buff, " %s.a = 1.0-%s.a;\n", blend, frgcolor);
+                        break;
+                    case FPE_BLEND_DST_COLOR:
+                        sprintf(buff, " %s.a = %s.a;\n", blend, dstcolor);
+                        break;
+                    case FPE_BLEND_ONE_MINUS_DST_COLOR:
+                        sprintf(buff, " %s.a = 1.0-%s.a;\n", blend, dstcolor);
+                        break;
+                    case FPE_BLEND_SRC_ALPHA:
+                        sprintf(buff, " %s.a = %s.a;\n", blend, frgcolor);
+                        break;
+                    case FPE_BLEND_ONE_MINUS_SRC_ALPHA:
+                        sprintf(buff, " %s.a = 1.0 - %s.a;\n", blend, frgcolor);
+                        break;
+                    case FPE_BLEND_DST_ALPHA:
+                        sprintf(buff, " %s.a = %s.a;\n", blend, dstcolor);
+                        break;
+                    case FPE_BLEND_ONE_MINUS_DST_ALPHA:
+                        sprintf(buff, " %s.a = 1.0 - %s.a;\n", blend, dstcolor);
+                        break;
+                    case FPE_BLEND_CONSTANT_COLOR:
+                        sprintf(buff, " %s.a = _gl4es_BlendColor.a;\n", blend);
+                        break;
+                    case FPE_BLEND_ONE_MINUS_CONSTANT_COLOR:
+                        sprintf(buff, " %s.a = 1.0-_gl4es_BlendColor.a;\n", blend);
+                        break;
+                    case FPE_BLEND_CONSTANT_ALPHA:
+                        sprintf(buff, " %s.a = _gl4es_BlendColor.a;\n", blend);
+                        break;
+                    case FPE_BLEND_ONE_MINUS_CONSTANT_ALPHA:
+                        sprintf(buff, " %s.a = 1.0 - _gl4es_BlendColor.a;\n", blend);
+                        break;
+                    case FPE_BLEND_SRC_ALPHA_SATURATE:
+                        sprintf(buff, " %s.a = min(%s.a, 1.0-%s.a);\n", blend, frgcolor, dstcolor);
+                        break;
+                }
+                ShadAppend(buff);
+            }
+        }
+        if(state->blendeqrgb==state->blendeqalpha)
+        {
+            switch(state->blendeqrgb) {
+                case FPE_BLENDEQ_FUNC_ADD:
+                    sprintf(buff, "%s = srcblend*%s + dstblend*%s;\n", frgcolor, frgcolor, dstcolor);
+                    break;
+                case FPE_BLENDEQ_FUNC_SUBTRACT:
+                    sprintf(buff, "%s = srcblend*%s - dstblend*%s;\n", frgcolor, frgcolor, dstcolor);
+                    break;
+                case FPE_BLENDEQ_FUNC_REVERSE_SUBTRACT:
+                    sprintf(buff, "%s = dstblend*%s - srcblend*%s;\n", frgcolor, dstcolor, frgcolor);
+                    break;
+                case FPE_BLENDEQ_MIN:
+                    sprintf(buff, "%s = min(%s ,%s);\n", frgcolor, frgcolor, dstcolor);
+                    break;
+                case FPE_BLENDEQ_MAX:
+                    sprintf(buff, "%s = max(%s ,%s);\n", frgcolor, frgcolor, dstcolor);
+                    break;
+            }
+            ShadAppend(buff);
+        } else {
+            switch(state->blendeqrgb) {
+                case FPE_BLENDEQ_FUNC_ADD:
+                    sprintf(buff, "%s.rgb = srcblend.rgb*%s.rgb + dstblend.rgb*%s.rgb;\n", frgcolor, frgcolor, dstcolor);
+                    break;
+                case FPE_BLENDEQ_FUNC_SUBTRACT:
+                    sprintf(buff, "%s.rgb = srcblend.rgb*%s.rgb - dstblend.rgb*%s.rgb;\n", frgcolor, frgcolor, dstcolor);
+                    break;
+                case FPE_BLENDEQ_FUNC_REVERSE_SUBTRACT:
+                    sprintf(buff, "%s.rgb = dstblend.rgb*%s.rgb - srcblend.rgb*%s.rgb;\n", frgcolor, dstcolor, frgcolor);
+                    break;
+                case FPE_BLENDEQ_MIN:
+                    sprintf(buff, "%s.rgb = min(%s.rgb ,%s.rgb);\n", frgcolor, frgcolor, dstcolor);
+                    break;
+                case FPE_BLENDEQ_MAX:
+                    sprintf(buff, "%s.rgb = max(%s.rgb ,%s.rgb);\n", frgcolor, frgcolor, dstcolor);
+                    break;
+            }
+            ShadAppend(buff);
+            switch(state->blendeqalpha) {
+                case FPE_BLENDEQ_FUNC_ADD:
+                    sprintf(buff, "%s.a = srcblend.a*%s.a + dstblend.a*%s.a;\n", frgcolor, frgcolor, dstcolor);
+                    break;
+                case FPE_BLENDEQ_FUNC_SUBTRACT:
+                    sprintf(buff, "%s.a = srcblend.a*%s.a - dstblend.a*%s.a;\n", frgcolor, frgcolor, dstcolor);
+                    break;
+                case FPE_BLENDEQ_FUNC_REVERSE_SUBTRACT:
+                    sprintf(buff, "%s.a = dstblend.a*%s.a - srcblend.a*%s.a;\n", frgcolor, dstcolor, frgcolor);
+                    break;
+                case FPE_BLENDEQ_MIN:
+                    sprintf(buff, "%s.a = min(%s.a ,%s.a);\n", frgcolor, frgcolor, dstcolor);
+                    break;
+                case FPE_BLENDEQ_MAX:
+                    sprintf(buff, "%s.a = max(%s.a ,%s.a);\n", frgcolor, frgcolor, dstcolor);
+                    break;
+            }
+            ShadAppend(buff);
+        }
+    }
 
     //done
     ShadAppend("gl_FragColor = fColor;\n");
@@ -1390,18 +1627,20 @@ const char* const* fpe_FragmentShader(shaderconv_need_t* need, fpe_state_t *stat
     return (const char* const*)&shad;
 }
 
-const char* const* fpe_CustomVertexShader(const char* initial, fpe_state_t* state)
+const char* const* fpe_CustomVertexShader(const char* initial, fpe_state_t* state, int default_fragment)
 {
     int planes = state->plane;
     char buff[1024];
     if(!shad_cap) shad_cap = 1024;
     if(!shad) shad = (char*)malloc(shad_cap);
-    int headline = GetLineFor(initial, "main");
+    int headline = gl4es_getline_for(initial, "main");
     if(headline) --headline;
 
     strcpy(shad, "");
     ShadAppend(initial);
 
+    int color = default_fragment?(strstr(initial, "_gl4es_Color")?0:1):0;   // need to add a simple color variant?
+if(default_fragment) printf("fpe_CustomVertexShader(%p, %p, %d)\n%s\ncolor=%d\n", initial, state, default_fragment, initial, color);
     // add some uniform and varying
     if(planes) {
         for (int i=0; i<hardext.maxplanes; i++) {
@@ -1415,20 +1654,34 @@ const char* const* fpe_CustomVertexShader(const char* initial, fpe_state_t* stat
             }
         }
     }
+    if(color) {
+        sprintf(buff, "attribute lowp vec4 _gl4es_Color;\n");
+        ShadAppend(buff);
+        ++headline;
+        sprintf(buff, "varying lowp vec4 Color;\n");
+        ShadAppend(buff);
+        ++headline;
+    }
     // wrap main if needed
-    if(planes) {
+    if(planes || color) {
         // wrap real main...
-        shad = InplaceReplace(shad, &shad_cap, "main", "_gl4es_main");
+        shad = gl4es_inplace_replace(shad, &shad_cap, "main", "_gl4es_main");
     }
 
     // let's start
     if(strstr(shad, "_gl4es_main")) {
         ShadAppend("\nvoid main() {\n");
-        ShadAppend("_gl4es_main();");
+        if(color) {
+            sprintf(buff, "Color = _gl4es_Color;\n");
+        }
+        ShadAppend("_gl4es_main();\n");
         if(planes) {
+            int clipvertex = 0;
+            if(strstr(shad, "gl4es_ClipVertex"))
+                clipvertex = 1;
             for (int i=0; i<hardext.maxplanes; i++) {
                 if((planes>>i)&1) {
-                    sprintf(buff, "clippedvertex_%d = dot(gl_ModelViewMatrix * gl_Vertex, _gl4es_ClipPlane_%d);\n", i, i);
+                    sprintf(buff, "clippedvertex_%d = dot(%s, _gl4es_ClipPlane_%d);\n", i, clipvertex?"gl4es_ClipVertex":"gl_ModelViewMatrix * gl_Vertex", i);
                     ShadAppend(buff);
                 }
             }
@@ -1447,11 +1700,15 @@ const char* const* fpe_CustomFragmentShader(const char* initial, fpe_state_t* st
     int planes = state->plane;
     int alpha_test = state->alphatest;
     int alpha_func = state->alphafunc;
+    int shaderblend = state->blend_enable;
     char buff[1024];
-    int headline = GetLineFor(initial, "main");
+    int headline = gl4es_getline_for(initial, "main");
     if(headline) --headline;
 
     strcpy(shad, "");
+    if(shaderblend) {
+        ShadAppend("#extension GL_ARM_shader_framebuffer_fetch : enable\n");
+    }
     ShadAppend(initial);
 
     // add some varying
@@ -1463,11 +1720,25 @@ const char* const* fpe_CustomFragmentShader(const char* initial, fpe_state_t* st
             }
         }
     }
-    if(alpha_test || planes) {
-        // wrap real main...
-        shad = InplaceReplace(shad, &shad_cap, "main", "_gl4es_main");
+    if(shaderblend && (
+        (state->blendsrcrgb>=FPE_BLEND_CONSTANT_COLOR && state->blendsrcrgb<=FPE_BLEND_ONE_MINUS_CONSTANT_ALPHA)
+     || (state->blenddstrgb>=FPE_BLEND_CONSTANT_COLOR && state->blenddstrgb<=FPE_BLEND_ONE_MINUS_CONSTANT_ALPHA)
+     || (state->blendsrcalpha>=FPE_BLEND_CONSTANT_COLOR && state->blendsrcalpha<=FPE_BLEND_ONE_MINUS_CONSTANT_ALPHA)
+     || (state->blenddstalpha>=FPE_BLEND_CONSTANT_COLOR && state->blenddstalpha<=FPE_BLEND_ONE_MINUS_CONSTANT_ALPHA)
+    )) {
+        sprintf(buff, "uniform mediump vec4 _gl4es_BlendColor;\n");
+        ShadAppend(buff);
     }
     int is_fragcolor = (strstr(shad, "gl_FragColor")!=NULL)?1:0;
+    if(alpha_test || planes || shaderblend) {
+        // wrap real main...
+        shad = gl4es_inplace_replace(shad, &shad_cap, "main", "_gl4es_main");
+        if(is_fragcolor) {
+            int l_main = gl4es_getline_for(shad, gl4es_prev_str(shad, strstr(shad, "_gl4es_main"))) - 1;
+            shad = gl4es_inplace_insert(gl4es_getline(shad, l_main), "lowp vec4 _gl4es_FragColor;\n", shad, &shad_cap);
+            shad = gl4es_inplace_replace(shad, &shad_cap, "gl_FragColor", "_gl4es_FragColor");
+        }
+    }
     if(strstr(shad, "_gl4es_main")) {
         ShadAppend("void main() {\n");
         ShadAppend(" _gl4es_main();\n");
@@ -1489,8 +1760,8 @@ const char* const* fpe_CustomFragmentShader(const char* initial, fpe_state_t* st
         //*** Alpha Test
         if(alpha_test) {
             if(alpha_test && alpha_func>FPE_NEVER) {
-                shad = InplaceInsert(GetLine(shad, headline), gl4es_alphaRefSource, shad, &shad_cap);
-                headline+=CountLine(gl4es_alphaRefSource);
+                shad = gl4es_inplace_insert(gl4es_getline(shad, headline), gl4es_alphaRefSource, shad, &shad_cap);
+                headline+=gl4es_countline(gl4es_alphaRefSource);
             } 
             if(comments) {
                 sprintf(buff, "// Alpha Test, fct=%X\n", alpha_func);
@@ -1504,10 +1775,244 @@ const char* const* fpe_CustomFragmentShader(const char* initial, fpe_state_t* st
                 // FPE_LESS FPE_EQUAL FPE_LEQUAL FPE_GREATER FPE_NOTEQUAL FPE_GEQUAL
                 // but need to negate the operator
                 const char* alpha_test_op[] = {">=","!=",">","<=","==","<"}; 
-                sprintf(buff, " if (floor(%s.a*255.) %s _gl4es_AlphaRef) discard;\n", is_fragcolor?"gl_FragColor":"gl_FragData[0]", alpha_test_op[alpha_func-FPE_LESS]);
+                sprintf(buff, " if (floor(%s.a*255.) %s _gl4es_AlphaRef) discard;\n", is_fragcolor?"_gl4es_FragColor":"gl_FragData[0]", alpha_test_op[alpha_func-FPE_LESS]);
                 ShadAppend(buff);
             }
         }
+
+        //*** Blend in Shader
+        if(shaderblend) {
+            const char* frgcolor = is_fragcolor?"_gl4es_FragColor":"gl_FragData[0]";
+            const char* dstcolor = "gl_LastFragColorARM";
+            
+            for(int i=0; i<2; ++i) {
+                const char* blend = i?"dstblend":"srcblend";
+                int blendrgb= i?state->blenddstrgb:state->blendsrcrgb;
+                int blendalpha = i?state->blenddstalpha:state->blendsrcalpha;
+                if(blendrgb==blendalpha) {
+                    int need_vec4 = 0;
+                    switch(blendrgb) {
+                        case FPE_BLEND_ZERO:
+                            sprintf(buff, " %s = 0.0;\n", blend);
+                            break;
+                        case FPE_BLEND_ONE:
+                            sprintf(buff, " %s = 1.0;\n", blend);
+                            break;
+                        case FPE_BLEND_SRC_COLOR:
+                            need_vec4 = 1;
+                            sprintf(buff, " %s = %s;\n", blend, frgcolor);
+                            break;
+                        case FPE_BLEND_ONE_MINUS_SRC_COLOR:
+                            need_vec4 = 1;
+                            sprintf(buff, " %s = vec4(1.0)-%s;\n", blend, frgcolor);
+                            break;
+                        case FPE_BLEND_DST_COLOR:
+                            need_vec4 = 1;
+                            sprintf(buff, " %s = %s;\n", blend, dstcolor);
+                            break;
+                        case FPE_BLEND_ONE_MINUS_DST_COLOR:
+                            need_vec4 = 1;
+                            sprintf(buff, " %s = vec4(1.0)-%s;\n", blend, dstcolor);
+                            break;
+                        case FPE_BLEND_SRC_ALPHA:
+                            sprintf(buff, " %s = %s.a;\n", blend, frgcolor);
+                            break;
+                        case FPE_BLEND_ONE_MINUS_SRC_ALPHA:
+                            sprintf(buff, " %s = 1.0 - %s.a;\n", blend, frgcolor);
+                            break;
+                        case FPE_BLEND_DST_ALPHA:
+                            sprintf(buff, " %s = %s.a;\n", blend, dstcolor);
+                            break;
+                        case FPE_BLEND_ONE_MINUS_DST_ALPHA:
+                            sprintf(buff, " %s = 1.0 - %s.a;\n", blend, dstcolor);
+                            break;
+                        case FPE_BLEND_CONSTANT_COLOR:
+                            need_vec4 = 1;
+                            sprintf(buff, " %s = _gl4es_BlendColor;\n", blend);
+                            break;
+                        case FPE_BLEND_ONE_MINUS_CONSTANT_COLOR:
+                            need_vec4 = 1;
+                            sprintf(buff, " %s = vec4(1.0)-_gl4es_BlendColor;\n", blend);
+                            break;
+                        case FPE_BLEND_CONSTANT_ALPHA:
+                            sprintf(buff, " %s = _gl4es_BlendColor.a;\n", blend);
+                            break;
+                        case FPE_BLEND_ONE_MINUS_CONSTANT_ALPHA:
+                            sprintf(buff, " %s = 1.0 - _gl4es_BlendColor.a;\n", blend);
+                            break;
+                        case FPE_BLEND_SRC_ALPHA_SATURATE:
+                            sprintf(buff, " %s = min(%s.a, 1.0-%s.a);\n", blend, frgcolor, dstcolor);
+                            break;
+                    }
+                    char buff2[100];
+                    if(need_vec4)
+                        sprintf(buff2, "lowp vec4 %s;\n", blend);
+                    else
+                        sprintf(buff2, "lowp float %s;\n", blend);
+                    ShadAppend(buff2);
+                    ShadAppend(buff);
+                } else {
+                    sprintf(buff, "lowp vec4 %s;\n", blend);
+                    ShadAppend(buff);
+                    switch(blendrgb) {
+                        case FPE_BLEND_ZERO:
+                            sprintf(buff, " %s.rgb = vec3(0.0);\n", blend);
+                            break;
+                        case FPE_BLEND_ONE:
+                            sprintf(buff, " %s.rgb = vec3(1.0);\n", blend);
+                            break;
+                        case FPE_BLEND_SRC_COLOR:
+                            sprintf(buff, " %s.rgb = %s.rgb;\n", blend, frgcolor);
+                            break;
+                        case FPE_BLEND_ONE_MINUS_SRC_COLOR:
+                            sprintf(buff, " %s.rgb = vec3(1.0)-%s.rgb;\n", blend, frgcolor);
+                            break;
+                        case FPE_BLEND_DST_COLOR:
+                            sprintf(buff, " %s.rgb = %s.rgb;\n", blend, dstcolor);
+                            break;
+                        case FPE_BLEND_ONE_MINUS_DST_COLOR:
+                            sprintf(buff, " %s.rgb = vec3(1.0)-%s.rgb;\n", blend, dstcolor);
+                            break;
+                        case FPE_BLEND_SRC_ALPHA:
+                            sprintf(buff, " %s.rgb = vec3(%s.a);\n", blend, frgcolor);
+                            break;
+                        case FPE_BLEND_ONE_MINUS_SRC_ALPHA:
+                            sprintf(buff, " %s.rgb = vec3(1.0 - %s.a);\n", blend, frgcolor);
+                            break;
+                        case FPE_BLEND_DST_ALPHA:
+                            sprintf(buff, " %s.rgb = vec3(%s.a);\n", blend, dstcolor);
+                            break;
+                        case FPE_BLEND_ONE_MINUS_DST_ALPHA:
+                            sprintf(buff, " %s.rgb = vec3(1.0 - %s.a);\n", blend, dstcolor);
+                            break;
+                        case FPE_BLEND_CONSTANT_COLOR:
+                            sprintf(buff, " %s.rgb = _gl4es_BlendColor.rgb;\n", blend);
+                            break;
+                        case FPE_BLEND_ONE_MINUS_CONSTANT_COLOR:
+                            sprintf(buff, " %s.rgb = vec3(1.0)-_gl4es_BlendColor.rgb;\n", blend);
+                            break;
+                        case FPE_BLEND_CONSTANT_ALPHA:
+                            sprintf(buff, " %s.rgb = vec3(_gl4es_BlendColor.a);\n", blend);
+                            break;
+                        case FPE_BLEND_ONE_MINUS_CONSTANT_ALPHA:
+                            sprintf(buff, " %s.rgb = vec3(1.0 - _gl4es_BlendColor.a);\n", blend);
+                            break;
+                        case FPE_BLEND_SRC_ALPHA_SATURATE:
+                            sprintf(buff, " %s.rgb = vec3(min(%s.a, 1.0-%s.a));\n", blend, frgcolor, dstcolor);
+                            break;
+                    }
+                    ShadAppend(buff);
+                    switch(blendalpha) {
+                        case FPE_BLEND_ZERO:
+                            sprintf(buff, " %s.a = 0.0;\n", blend);
+                            break;
+                        case FPE_BLEND_ONE:
+                            sprintf(buff, " %s.a = 1.0;\n", blend);
+                            break;
+                        case FPE_BLEND_SRC_COLOR:
+                            sprintf(buff, " %s.a = %s.a;\n", blend, frgcolor);
+                            break;
+                        case FPE_BLEND_ONE_MINUS_SRC_COLOR:
+                            sprintf(buff, " %s.a = 1.0-%s.a;\n", blend, frgcolor);
+                            break;
+                        case FPE_BLEND_DST_COLOR:
+                            sprintf(buff, " %s.a = %s.a;\n", blend, dstcolor);
+                            break;
+                        case FPE_BLEND_ONE_MINUS_DST_COLOR:
+                            sprintf(buff, " %s.a = 1.0-%s.a;\n", blend, dstcolor);
+                            break;
+                        case FPE_BLEND_SRC_ALPHA:
+                            sprintf(buff, " %s.a = %s.a;\n", blend, frgcolor);
+                            break;
+                        case FPE_BLEND_ONE_MINUS_SRC_ALPHA:
+                            sprintf(buff, " %s.a = 1.0 - %s.a;\n", blend, frgcolor);
+                            break;
+                        case FPE_BLEND_DST_ALPHA:
+                            sprintf(buff, " %s.a = %s.a;\n", blend, dstcolor);
+                            break;
+                        case FPE_BLEND_ONE_MINUS_DST_ALPHA:
+                            sprintf(buff, " %s.a = 1.0 - %s.a;\n", blend, dstcolor);
+                            break;
+                        case FPE_BLEND_CONSTANT_COLOR:
+                            sprintf(buff, " %s.a = _gl4es_BlendColor.a;\n", blend);
+                            break;
+                        case FPE_BLEND_ONE_MINUS_CONSTANT_COLOR:
+                            sprintf(buff, " %s.a = 1.0-_gl4es_BlendColor.a;\n", blend);
+                            break;
+                        case FPE_BLEND_CONSTANT_ALPHA:
+                            sprintf(buff, " %s.a = _gl4es_BlendColor.a;\n", blend);
+                            break;
+                        case FPE_BLEND_ONE_MINUS_CONSTANT_ALPHA:
+                            sprintf(buff, " %s.a = 1.0 - _gl4es_BlendColor.a;\n", blend);
+                            break;
+                        case FPE_BLEND_SRC_ALPHA_SATURATE:
+                            sprintf(buff, " %s.a = min(%s.a, 1.0-%s.a);\n", blend, frgcolor, dstcolor);
+                            break;
+                    }
+                    ShadAppend(buff);
+                }
+            }
+            if(state->blendeqrgb==state->blendeqalpha)
+            {
+                switch(state->blendeqrgb) {
+                    case FPE_BLENDEQ_FUNC_ADD:
+                        sprintf(buff, "%s = srcblend*%s + dstblend*%s;\n", frgcolor, frgcolor, dstcolor);
+                        break;
+                    case FPE_BLENDEQ_FUNC_SUBTRACT:
+                        sprintf(buff, "%s = srcblend*%s - dstblend*%s;\n", frgcolor, frgcolor, dstcolor);
+                        break;
+                    case FPE_BLENDEQ_FUNC_REVERSE_SUBTRACT:
+                        sprintf(buff, "%s = dstblend*%s - srcblend*%s;\n", frgcolor, dstcolor, frgcolor);
+                        break;
+                    case FPE_BLENDEQ_MIN:
+                        sprintf(buff, "%s = min(%s ,%s);\n", frgcolor, frgcolor, dstcolor);
+                        break;
+                    case FPE_BLENDEQ_MAX:
+                        sprintf(buff, "%s = max(%s ,%s);\n", frgcolor, frgcolor, dstcolor);
+                        break;
+                }
+                ShadAppend(buff);
+            } else {
+                switch(state->blendeqrgb) {
+                    case FPE_BLENDEQ_FUNC_ADD:
+                        sprintf(buff, "%s.rgb = srcblend.rgb*%s.rgb + dstblend.rgb*%s.rgb;\n", frgcolor, frgcolor, dstcolor);
+                        break;
+                    case FPE_BLENDEQ_FUNC_SUBTRACT:
+                        sprintf(buff, "%s.rgb = srcblend.rgb*%s.rgb - dstblend.rgb*%s.rgb;\n", frgcolor, frgcolor, dstcolor);
+                        break;
+                    case FPE_BLENDEQ_FUNC_REVERSE_SUBTRACT:
+                        sprintf(buff, "%s.rgb = dstblend.rgb*%s.rgb - srcblend.rgb*%s.rgb;\n", frgcolor, dstcolor, frgcolor);
+                        break;
+                    case FPE_BLENDEQ_MIN:
+                        sprintf(buff, "%s.rgb = min(%s.rgb ,%s.rgb);\n", frgcolor, frgcolor, dstcolor);
+                        break;
+                    case FPE_BLENDEQ_MAX:
+                        sprintf(buff, "%s.rgb = max(%s.rgb ,%s.rgb);\n", frgcolor, frgcolor, dstcolor);
+                        break;
+                }
+                ShadAppend(buff);
+                switch(state->blendeqalpha) {
+                    case FPE_BLENDEQ_FUNC_ADD:
+                        sprintf(buff, "%s.a = srcblend.a*%s.a + dstblend.a*%s.a;\n", frgcolor, frgcolor, dstcolor);
+                        break;
+                    case FPE_BLENDEQ_FUNC_SUBTRACT:
+                        sprintf(buff, "%s.a = srcblend.a*%s.a - dstblend.a*%s.a;\n", frgcolor, frgcolor, dstcolor);
+                        break;
+                    case FPE_BLENDEQ_FUNC_REVERSE_SUBTRACT:
+                        sprintf(buff, "%s.a = dstblend.a*%s.a - srcblend.a*%s.a;\n", frgcolor, dstcolor, frgcolor);
+                        break;
+                    case FPE_BLENDEQ_MIN:
+                        sprintf(buff, "%s.a = min(%s.a ,%s.a);\n", frgcolor, frgcolor, dstcolor);
+                        break;
+                    case FPE_BLENDEQ_MAX:
+                        sprintf(buff, "%s.a = max(%s.a ,%s.a);\n", frgcolor, frgcolor, dstcolor);
+                        break;
+                }
+                ShadAppend(buff);
+            }
+        }
+        if((alpha_test || planes || shaderblend) && is_fragcolor)
+            ShadAppend("gl_FragColor = _gl4es_FragColor;\n");
 
         ShadAppend("}");
     }

@@ -25,10 +25,12 @@ static int testGLSL(const char* version, int uniformLoc) {
     LOAD_GLES2(glCompileShader);
     LOAD_GLES2(glGetShaderiv);
     LOAD_GLES2(glDeleteShader);
+    LOAD_GLES(glGetError);
 
     GLuint shad = gles_glCreateShader(GL_VERTEX_SHADER);
     const char* shadTest[4] = {
         version,
+        "#extension require GL_IMG_uniform_buffer_object"
         "\n"
         "layout(location = 0) in vec4 vecPos;\n",
         uniformLoc?"layout(location = 0) uniform mat4 matMVP;\n":"uniform mat4 matMVP;\n",
@@ -49,6 +51,7 @@ static int testGLSL(const char* version, int uniformLoc) {
     }
     */
     gles_glDeleteShader(shad);
+    gles_glGetError();	// reset GL Error
 
     return compiled;
 }
@@ -59,6 +62,7 @@ static int testTextureCubeLod() {
     LOAD_GLES2(glCompileShader);
     LOAD_GLES2(glGetShaderiv);
     LOAD_GLES2(glDeleteShader);
+    LOAD_GLES(glGetError);
 
     GLuint shad = gles_glCreateShader(GL_FRAGMENT_SHADER);
     const char* shadTest[3] = {
@@ -76,13 +80,12 @@ static int testTextureCubeLod() {
     GLint compiled;
     gles_glGetShaderiv(shad, GL_COMPILE_STATUS, &compiled);
     gles_glDeleteShader(shad);
+    gles_glGetError(); // reset GL Error
 
     return compiled;
 }
 
-#if defined(NOX11) && defined(NOEGL)
-__attribute__((visibility("default")))
-#endif
+EXPORT
 void GetHardwareExtensions(int notest)
 {
     if(tested) return;
@@ -104,7 +107,11 @@ void GetHardwareExtensions(int notest)
             hardext.maxvarying = 8;
             hardext.maxtex = 8;
             hardext.maxvattrib = 16;
+#ifdef AMIGAOS4
+            hardext.npot = 3;
+#else
             hardext.npot = 1;
+#endif
             hardext.fbo = 1; 
             hardext.blendcolor = 1;
             hardext.blendsub = 1;
@@ -245,7 +252,7 @@ void GetHardwareExtensions(int notest)
     LOAD_GLES(glGetIntegerv);
     LOAD_GLES(glGetError);
     // Now get extensions
-    const char* Exts = gles_glGetString(GL_EXTENSIONS);
+    const char *Exts = (const char *) gles_glGetString(GL_EXTENSIONS);
     // Parse them!
     #define S(A, B, C) if(strstr(Exts, A)) { hardext.B = 1; SHUT_LOGD("Extension %s detected%s",A, C?" and used\n":"\n"); } 
     if(hardext.esversion>1) hardext.npot = 1;
@@ -256,7 +263,12 @@ void GetHardwareExtensions(int notest)
         SHUT_LOGD("Hardware %s NPOT detected and used\n", hardext.npot==3?"Full":(hardext.npot==2?"Limited+Mipmap":"Limited"));
     }
     S("GL_EXT_blend_minmax ", blendminmax, 1);
-    S("GL_EXT_draw_buffers ", drawbuffers, 1);
+    if (hardext.esversion>2) {
+        SHUT_LOGD("Extension GL_EXT_draw_buffers is in core ES3, and so used\n");
+        hardext.drawbuffers = 1;
+    } else {
+        S("GL_EXT_draw_buffers ", drawbuffers, 1);
+    }
     /*if(hardext.blendcolor==0) {
         // try by just loading the function
         LOAD_GLES_OR_OES(glBlendColor);
@@ -285,7 +297,7 @@ void GetHardwareExtensions(int notest)
         hardext.cubemap = 1;
         SHUT_LOGD("BlendColor is in core, and so used\n");
         hardext.blendcolor = 1;
-        SHUT_LOGD("Blend Substract is in core, and so used\n");
+        SHUT_LOGD("Blend Subtract is in core, and so used\n");
         hardext.blendsub = 1;
         SHUT_LOGD("Blend Function and Equation Separation is in core, and so used\n");
         hardext.blendfunc = 1;
@@ -314,6 +326,11 @@ void GetHardwareExtensions(int notest)
         S("GL_EXT_color_buffer_float ", floatfbo, 1);
         S("GL_EXT_color_buffer_half_float ", halffloatfbo, 1);
     }
+    S("GL_AOS4_texture_format_RGB332", rgb332, 0);
+    S("GL_AOS4_texture_format_RGB332REV", rgb332rev, 0);
+    S("GL_AOS4_texture_format_RGBA1555REV", rgba1555rev, 1);
+    S("GL_AOS4_texture_format_RGBA8888", rgba8888, 1);
+    S("GL_AOS4_texture_format_RGBA8888REV", rgba8888rev, 1);
 
     if (hardext.esversion>1) {
         if(!globals4es.nohighp) {
@@ -345,7 +362,11 @@ void GetHardwareExtensions(int notest)
         gles_glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &hardext.maxvattrib);
         SHUT_LOGD("Max vertex attrib: %d\n", hardext.maxvattrib);
         S("GL_OES_standard_derivatives ", derivatives, 1);
+        S("GL_ARM_shader_framebuffer_fetch", shader_fbfetch, 1);
         S("GL_OES_get_program ", prgbinary, 1);
+        if(!hardext.prgbinary) {
+            S("GL_OES_get_program_binary ", prgbinary, 1);
+        }
         if(hardext.prgbinary) {
             gles_glGetIntegerv(GL_NUM_PROGRAM_BINARY_FORMATS_OES, &hardext.prgbin_n);
             SHUT_LOGD("Number of supported Program Binary Format: %d\n", hardext.prgbin_n);
@@ -397,7 +418,7 @@ void GetHardwareExtensions(int notest)
         hardext.maxdrawbuffers=MAX_DRAW_BUFFERS;
     SHUT_LOGD("Max Color Attachments: %d / Draw buffers: %d\n", hardext.maxdrawbuffers, hardext.maxcolorattach);
     // get GLES driver signatures...
-    const char* vendor = gles_glGetString(GL_VENDOR);
+    const char *vendor = (const char *) gles_glGetString(GL_VENDOR);
     SHUT_LOGD("Hardware vendor is %s\n", vendor);
     if(strstr(vendor, "ARM"))
         hardext.vendor = VEND_ARM;

@@ -15,20 +15,19 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       # Runs a set of commands using the runners shell
       - name: Build GL4ES
         run: |
-          wget https://github.com/leetal/ios-cmake/raw/master/ios.toolchain.cmake
           mkdir build
           cd build
+          wget https://github.com/leetal/ios-cmake/raw/master/ios.toolchain.cmake
           cmake .. -G Xcode -DCMAKE_TOOLCHAIN_FILE=ios.toolchain.cmake -DDEFAULT_ES=2 -DNOX11=ON -DNOEGL=ON -DSTATICLIB=OFF -DPLATFORM=OS64 -DENABLE_BITCODE=FALSE  -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED="NO" -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY=""
           cmake --build . --config Release --target GL
 
       - name: Upload lib
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@main
         with:
           name: libGL
           path: lib/Release
-          
