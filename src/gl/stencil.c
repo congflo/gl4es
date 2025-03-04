@@ -52,7 +52,7 @@ void APIENTRY_GL4ES gl4es_glStencilMaskSeparate(GLenum face, GLuint mask) {
     }
 }
 AliasExport(void,glStencilMaskSeparate,,(GLenum face, GLuint mask));
-
+/*
 void APIENTRY_GL4ES gl4es_glStencilFunc(GLenum func, GLint ref, GLuint mask) {
     if(!glstate->list.pending) 
         PUSH_IF_COMPILING(glStencilFunc);
@@ -159,7 +159,7 @@ void APIENTRY_GL4ES gl4es_glStencilOpSeparate(GLenum face, GLenum sfail, GLenum 
     }
 }
 AliasExport(void,glStencilOpSeparate,,(GLenum face, GLenum sfail, GLenum zfail, GLenum zpass));
-
+*/
 void APIENTRY_GL4ES gl4es_glClearStencil(GLint s) {
     if(!glstate->list.pending) 
         PUSH_IF_COMPILING(glClearStencil);
