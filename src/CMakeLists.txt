@@ -221,6 +221,7 @@ else()
     endif()
 
     target_link_libraries(GL
+        "-FFrameworks"
         "-framework libGLESv2"
     )
 
