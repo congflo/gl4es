@@ -219,7 +219,10 @@ else()
     if(USE_ANDROID_LOG)
         target_link_libraries(GL ${log-lib})
     endif()
-    
+
+    target_link_libraries(GL
+        "-framework libGLESv2"
+
     if(CMAKE_SHARED_LIBRARY_SUFFIX MATCHES ".so")
         set_target_properties(GL PROPERTIES SUFFIX ".so.1")
     endif()
